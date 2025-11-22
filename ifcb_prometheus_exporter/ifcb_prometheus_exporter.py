@@ -4,6 +4,20 @@ import requests
 from datetime import datetime
 
 from prometheus_client import Gauge, start_http_server
+import argparse
+
+DASHBOARD_URLS = {
+    "caloos": "https://ifcb.caloos.org/api",
+    "whoi": "https://ifcb-data.whoi.edu/api",
+    "salish_sea": "https://salish-sea-ifcbdb.srv.axds.co/api",
+    "habon": "https://habon-ifcb.whoi.edu/api",
+}
+
+parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
+parser.add_argument("--dashboard", choices=DASHBOARD_URLS.keys(), default="caloos", help="Dashboard to use for base URL")
+args = parser.parse_args()
+
+BASE_URL = DASHBOARD_URLS[args.dashboard]
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -16,8 +30,6 @@ TIMELINE_METRICS = {
     'n_triggers': 'Count',
     'n_images': 'Count',
 }
-
-BASE_URL = "https://ifcb.caloos.org/api"
 
 # Gauges with dataset label
 GAUGES = {}

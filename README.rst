@@ -46,11 +46,20 @@ To run the project's tests::
 Usage Example
 -------------
 
-To run the exporter and expose metrics on port 8000::
+To run the exporter and expose metrics on port 8000, specify the dashboard with the ``--dashboard`` option (supported: ``caloos``, ``whoi``, ``bloofinz``, ``bml``)::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --dashboard caloos
 
-Then visit http://localhost:8000/metrics to view the metrics in Prometheus format.
+Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the appropriate base URL for the selected dashboard.
+
+You can select the IFCB dashboard to use for data collection with the ``--dashboard`` command-line argument. Supported options are::
+
+   caloos
+   whoi
+   bloofinz
+   bml
+
+This will use the appropriate base URL for the selected dashboard.
 
 Prometheus Integration
 ---------------------
