@@ -1,0 +1,9 @@
+name: ifcb-prometheus-exporter
+channels:
+  - conda-forge
+dependencies:
+  - python<3.12
+  - requests
+  - pip
+  - pip:
+    - prometheus-client

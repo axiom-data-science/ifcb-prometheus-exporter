@@ -1,0 +1,11 @@
+name: ifcb-prometheus-exporter
+channels:
+  - conda-forge
+dependencies:
+  - pytest
+  - pytest-cov
+  - isort
+  - flake8
+  - pre-commit
+  - types-setuptools
+  - mypy

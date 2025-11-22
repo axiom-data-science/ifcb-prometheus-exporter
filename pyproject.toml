@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ifcb-prometheus-exporter"
+version = "0.0.1"
+description = "A Prometheus exporter for Imaging FlowCytobot (IFCB) data. This tool collects metrics from IFCB instruments and exposes them in a format compatible with Prometheus monitoring systems, enabling real-time observability and integration with Grafana dashboards."
+authors = [
+    {name = "Developer", email="dev@axiomdatascience.com"},
+]
+readme = {file = "README.rst", content-type="text/x-rst"}
+license = {file = "LICENSE"}
+keywords = ["ifcb-prometheus-exporter"]
+
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11"
+]
+
+[project.urls]
+
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = false
+ignore-magic = false
+ignore-semiprivate = true
+ignore-private = true
+ignore-property-decorators = true
+ignore-module = false
+fail-under = 95
+exclude = ["setup.py", "docs", "tests"]
+verbose = 1
+quiet = false
+color = true
+
+[tool.isort]
+skip_glob = ["docs/*", "docs/**/*.py"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-v"
+# only test the root level, otherwise it picks up the tests of the project template
+testpaths = [
+    "tests",
+]
+
+[tool.coverage.run]
+omit = [
+    "setup.py",
+    "ifcb_prometheus_exporter/_version.py",
+    "ifcb_prometheus_exporter/version.py",
+    "tests/*",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+ifcb_prometheus_exporter = "ifcb_prometheus_exporter"

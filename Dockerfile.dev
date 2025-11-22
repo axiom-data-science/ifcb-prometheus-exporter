@@ -1,0 +1,14 @@
+ARG baseimage
+
+FROM $baseimage
+
+USER root
+
+RUN apt-get update && apt-get install -y git && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+USER $MAMBA_USER
+
+COPY --chown=$MAMBA_USER:$MAMBA_USER dev-environment.yml /tmp/environment.yml
+RUN micromamba install -y -n base --freeze-installed -f /tmp/environment.yml && \
+    micromamba clean --all --yes && \
+    rm /tmp/environment.yml
