@@ -1,18 +1,69 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
 stages:
-- test
-- secret-detection
-sast:
-  stage: test
-include:
-- template: Security/Secret-Detection.gitlab-ci.yml
+  - security
+  - build-image
+  - build-test
+  - test
+  - push
+  - cleanup
+
 variables:
-  SECRET_DETECTION_ENABLED: 'true'
-secret_detection:
-  stage: secret-detection
+  PROJ: "ifcb-prometheus-exporter"
+  IMAGE: $PROJ:$CI_COMMIT_REF_NAME
+  BUILD_IMAGE: $PROJ-build:$CI_COMMIT_REF_NAME
+  TEST_IMAGE: $PROJ-test:$CI_COMMIT_REF_NAME
+  AXIOM_LATEST: registry.axiom/$PROJ:latest
+  AXIOM_TAG: registry.axiom/$PROJ:$CI_COMMIT_TAG
+  DOCKER_BUILDKIT: 1
+
+gitleak_scan:
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  stage: security
+  script:
+    - gitleaks dir -v
+
+build_test_image:
+  stage: build-test
+  script:
+    - docker build $BUILDOPTS --build-arg baseimage=$IMAGE -t $TEST_IMAGE -f Dockerfile.dev .
+
+build_image:
+  stage: build-image
+  script:
+    - docker build $BUILDOPTS -t $IMAGE .
+
+lint:
+  image: $TEST_IMAGE
+  stage: test
+  variables:
+    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+  cache:
+    paths:
+      - ${PRE_COMMIT_HOME}
+  script:
+    - git config --global --add safe.directory $PWD
+    - pre-commit autoupdate
+    - pre-commit run --show-diff-on-failure --color=always --all-files
+
+test:
+  image: $TEST_IMAGE
+  stage: test
+  script:
+    - pytest -sv tests
+
+#push:
+#  stage: push
+#  only:
+#    - main
+#  script:
+#    - docker tag $IMAGE $AXIOM_LATEST
+#    - docker push $AXIOM_LATEST
+#
+#push_tag:
+#  stage: push
+#  only:
+#    - tags
+#  script:
+#    - docker tag $IMAGE $AXIOM_TAG
+#    - docker push $AXIOM_TAG
