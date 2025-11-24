@@ -22,9 +22,9 @@ This project relies on conda for installation and managing of the project depend
 
     The above command creates a new conda environment titled ``ifcb-prometheus-exporter`` with the necessary project
     dependencies.
-   
+
     To update an existing environment with any changes to the dependencies use::
-      
+
       conda env update -f environment.yml
 
 4. An Additional environment file is present for testing and development environments. The additional developer dependencies can be installed with::

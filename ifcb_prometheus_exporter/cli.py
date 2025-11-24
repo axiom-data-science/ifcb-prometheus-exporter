@@ -13,7 +13,9 @@ def main():
     args = parser.parse_args()
 
     print("Arguments: " + str(args._))
-    print("Replace this message by putting your code into ifcb_prometheus_exporter.cli.main")
+    print(
+        "Replace this message by putting your code into ifcb_prometheus_exporter.cli.main"
+    )
     return 0
 
 
