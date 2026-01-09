@@ -8,24 +8,15 @@ import requests
 
 from prometheus_client import Gauge, start_http_server
 
-
-DASHBOARD_URLS = {
-    "caloos": "https://ifcb.caloos.org/api",
-    "whoi": "https://ifcb-data.whoi.edu/api",
-    "salish_sea": "https://salish-sea-ifcbdb.srv.axds.co/api",
-    "habon": "https://habon-ifcb.whoi.edu/api",
-}
-
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
-    "--dashboard",
-    choices=DASHBOARD_URLS.keys(),
-    default="caloos",
-    help="Dashboard to use for base URL",
+    "--base-url",
+    required=True,
+    help="Base URL for the IFCB API (e.g., https://ifcb.caloos.org/api)",
 )
 args = parser.parse_args()
 
-BASE_URL = DASHBOARD_URLS[args.dashboard]
+BASE_URL = args.base_url
 
 TIMELINE_METRICS = {
     "size": "Bytes",

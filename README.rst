@@ -46,20 +46,17 @@ To run the project's tests::
 Usage Example
 -------------
 
-To run the exporter and expose metrics on port 8000, specify the dashboard with the ``--dashboard`` option (supported: ``caloos``, ``whoi``, ``bloofinz``, ``bml``)::
+To run the exporter and expose metrics on port 8000, you must specify the base URL for the IFCB API using the ``--base-url`` argument::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --dashboard caloos
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api
 
-Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the appropriate base URL for the selected dashboard.
+Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the provided base URL for data collection.
 
-You can select the IFCB dashboard to use for data collection with the ``--dashboard`` command-line argument. Supported options are::
-
-   caloos
-   whoi
-   bloofinz
-   bml
-
-This will use the appropriate base URL for the selected dashboard.
+The following  are a list of the base URLs that can be used with this exporter:
+   1. for Caloos: https://ifcb.caloos.org/api
+   2. for WHOI: https://ifcb-data.whoi.edu/api
+   3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
+   4. for HABON: https://habon-ifcb.whoi.edu/api
 
 Prometheus Integration
 ---------------------
