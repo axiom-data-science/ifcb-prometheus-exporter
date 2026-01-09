@@ -48,7 +48,7 @@ Usage Example
 
 To run the exporter and expose metrics on port 8000, you must specify the base URL for the IFCB API using the ``--base-url`` argument::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --port 8000
 
 Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the provided base URL for data collection.
 
