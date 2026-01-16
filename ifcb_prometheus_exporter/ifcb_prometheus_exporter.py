@@ -1,13 +1,13 @@
 """Prometheus metrics for IFCB exporter."""
 
 import argparse
+import re
 
 from datetime import datetime
-import re
+
 import requests
 
 from bs4 import BeautifulSoup
-
 from prometheus_client import Gauge, start_http_server
 
 
@@ -42,9 +42,21 @@ TIMELINE_METRICS = {
 
 # Add gauges for data existence checks
 CLASSIFICATION_OUTPUT_GAUGES = {
-    "has_blobs": Gauge("ifcb_has_blobs", "Whether blobs exist for dataset (1=true, 0=false)", ["dataset"]),
-    "has_features": Gauge("ifcb_has_features", "Whether features exist for dataset (1=true, 0=false)", ["dataset"]),
-    "has_class_scores": Gauge("ifcb_has_class_scores", "Whether class scores exist for dataset (1=true, 0=false)", ["dataset"]),
+    "has_blobs": Gauge(
+        "ifcb_has_blobs",
+        "Whether blobs exist for dataset (1=true, 0=false)",
+        ["dataset"],
+    ),
+    "has_features": Gauge(
+        "ifcb_has_features",
+        "Whether features exist for dataset (1=true, 0=false)",
+        ["dataset"],
+    ),
+    "has_class_scores": Gauge(
+        "ifcb_has_class_scores",
+        "Whether class scores exist for dataset (1=true, 0=false)",
+        ["dataset"],
+    ),
 }
 
 # Gauges with dataset label
@@ -101,9 +113,10 @@ def fetch_latest_data(metric, dataset):
     )
     return latest_value, latest_value_time
 
+
 def fetch_bin_id_from_html(dataset):
     """Scrape bin IDs from the HTML page for a dataset."""
-    base = BASE_URL.replace('/api', '')
+    base = BASE_URL.replace("/api", "")
     url = f"{base}/bin?dataset={dataset}"
     response = requests.get(url)
     response.raise_for_status()
@@ -113,17 +126,18 @@ def fetch_bin_id_from_html(dataset):
     match = re.search(r'_bin\s*=\s*"([^"]+)"', script_text)
     if match:
         current_bin = match.group(1)
-    return current_bin  
+    return current_bin
+
 
 def check_classification_output(dataset):
     """Check for the existence of blobs, features, and class scores for a dataset."""
-    bin = fetch_bin_id_from_html(dataset)  
+    bin = fetch_bin_id_from_html(dataset)
     url = f"{BASE_URL}/has_products/{bin}"
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.HTTPError as e:
+    except requests.exceptions.HTTPError:
         # 500 error is returned if all three products are False, return None and address later
         return None
     # Example response: {"has_blobs": true, "has_features": true, "has_class_scores": true}
