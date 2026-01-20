@@ -9,23 +9,22 @@ import requests
 from prometheus_client import Gauge, start_http_server
 
 
-DASHBOARD_URLS = {
-    "caloos": "https://ifcb.caloos.org/api",
-    "whoi": "https://ifcb-data.whoi.edu/api",
-    "salish_sea": "https://salish-sea-ifcbdb.srv.axds.co/api",
-    "habon": "https://habon-ifcb.whoi.edu/api",
-}
-
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
-    "--dashboard",
-    choices=DASHBOARD_URLS.keys(),
-    default="caloos",
-    help="Dashboard to use for base URL",
+    "--base-url",
+    required=True,
+    help="Base URL for the IFCB API (e.g., https://ifcb.caloos.org/api)",
+)
+parser.add_argument(
+    "--port",
+    type=int,
+    default=8000,
+    help="Port to expose Prometheus metrics on (default: 8000)",
 )
 args = parser.parse_args()
 
-BASE_URL = DASHBOARD_URLS[args.dashboard]
+BASE_URL = args.base_url
+PORT = args.port
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -96,8 +95,8 @@ def fetch_latest_data(metric, dataset):
 
 def main():
     """Main function to start the Prometheus exporter."""
-    # Start Prometheus metrics server on port 8000 (you can choose another port if needed)
-    start_http_server(8000)
+    # Start Prometheus metrics server on the specified port
+    start_http_server(PORT)
 
     # Fetch and update metrics for all datasets
     for dataset in get_dataset_list():
