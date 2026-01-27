@@ -11,7 +11,6 @@ import requests
 
 from prometheus_client import Gauge, start_http_server
 
-
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
     "--base-url",
