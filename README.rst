@@ -58,6 +58,31 @@ The following  are a list of the base URLs that can be used with this exporter:
    3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
    4. for HABON: https://habon-ifcb.whoi.edu/api
 
+Metrics Returned
+-----------------
+The exporter provides the following metrics:
+- `ifcb_has_blobs{dataset="<dataset_name>"}`: Indicates the last date blobs exist for the specified dataset (Unix timestamp), or 0 if none exist.
+- `ifcb_has_features{dataset="<dataset_name>"}`: Indicates the last date features exist for the specified dataset (Unix timestamp), or 0 if none exist.
+- `ifcb_has_class_scores{dataset="<dataset_name>"}`: Indicates the last date class scores exist for the specified dataset (Unix timestamp), or 0 if none exist.
+- `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
+- `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
+- `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C
+- `ifcb_temperature_timestamp{dataset="<dataset_name>"}`: Timestamp of latest temperature value
+- `ifcb_humidity_value{dataset="<dataset_name>"}`: Latest humidity in Percentage
+- `ifcb_humidity_timestamp{dataset="<dataset_name>"}`: Timestamp of latest humidity value
+- `ifcb_run_time_value{dataset="<dataset_name>"}`: Latest run_time in Seconds
+- `ifcb_run_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest run_time value
+- `ifcb_look_time_value{dataset="<dataset_name>"}`: Latest look_time in Seconds
+- `ifcb_look_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest look_time value
+- `ifcb_ml_analyzed_value{dataset="<dataset_name>"}`: Latest ml_analyzed in Milliliters
+- `ifcb_ml_analyzed_timestamp{dataset="<dataset_name>"}`: Timestamp of latest ml_analyzed value
+- `ifcb_concentration_value{dataset="<dataset_name>"}`: Latest concentration in ROIs / ml
+- `ifcb_concentration_timestamp{dataset="<dataset_name>"}`: Timestamp of latest concentration value
+- `ifcb_n_triggers_value{dataset="<dataset_name>"}`: Latest n_triggers in Count
+- `ifcb_n_triggers_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_triggers value
+- `ifcb_n_images_value{dataset="<dataset_name>"}`: Latest n_images in Count
+- `ifcb_n_images_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_images value
+
 Prometheus Integration
 ---------------------
 
