@@ -2,12 +2,13 @@
 
 import argparse
 import re
+import time
 
 from datetime import datetime
+from typing import Dict, Tuple
 
 import requests
 
-from bs4 import BeautifulSoup
 from prometheus_client import Gauge, start_http_server
 
 
@@ -44,17 +45,17 @@ TIMELINE_METRICS = {
 CLASSIFICATION_OUTPUT_GAUGES = {
     "has_blobs": Gauge(
         "ifcb_has_blobs",
-        "Whether blobs exist for dataset (1=true, 0=false)",
+        "Last date blobs exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
     "has_features": Gauge(
         "ifcb_has_features",
-        "Whether features exist for dataset (1=true, 0=false)",
+        "Last date features exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
     "has_class_scores": Gauge(
         "ifcb_has_class_scores",
-        "Whether class scores exist for dataset (1=true, 0=false)",
+        "Last date class scores exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
 }
@@ -72,6 +73,8 @@ for metric, unit in TIMELINE_METRICS.items():
             ["dataset"],
         ),
     }
+
+classification_cache: Dict[Tuple[str, str], str] = {}  # {(dataset, key): date_string}
 
 
 def update_metric(metric, dataset, latest_value, latest_value_time):
@@ -114,34 +117,80 @@ def fetch_latest_data(metric, dataset):
     return latest_value, latest_value_time
 
 
-def fetch_bin_id_from_html(dataset):
-    """Scrape bin IDs from the HTML page for a dataset."""
-    base = BASE_URL.replace("/api", "")
-    url = f"{base}/bin?dataset={dataset}"
+def fetch_bins(dataset):
+    """Fetch the list of bins for a given dataset."""
+    url = f"{BASE_URL}/list_bins?dataset={dataset}"
     response = requests.get(url)
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
-    # Adjust the selector below to match where bin IDs appear in the HTML
-    script_text = "".join([script.text for script in soup.find_all("script")])
-    match = re.search(r'_bin\s*=\s*"([^"]+)"', script_text)
+    data = response.json()["data"]
+    bins = [
+        item["pid"]
+        for item in sorted(data, key=lambda x: x["sample_time"], reverse=True)
+    ]
+    return bins
+
+
+def get_date_from_bin(bin):
+    """Extract date from bin name."""
+    # bin example D20260114T160653_IFCB160
+    match = re.search(r"D(\d{8})T", bin)
     if match:
-        current_bin = match.group(1)
-    return current_bin
+        return match.group(1)
+    else:
+        raise ValueError(f"Invalid bin format: {bin}")
 
 
 def check_classification_output(dataset):
-    """Check for the existence of blobs, features, and class scores for a dataset."""
-    bin = fetch_bin_id_from_html(dataset)
-    url = f"{BASE_URL}/has_products/{bin}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.HTTPError:
-        # 500 error is returned if all three products are False, return None and address later
+    """Find the most recent date where each classification output exists for a dataset."""
+    bins = fetch_bins(dataset)
+
+    # Initialize result with cached values if they exist
+    result = {}
+    for key in CLASSIFICATION_OUTPUT_GAUGES:
+        cached_value = classification_cache.get((dataset, key))
+        if cached_value:
+            result[key] = cached_value
+
+    # If we have all three cached, we can still check a few recent bins for updates
+    # Only check the first 10 bins (most recent)
+    bins_to_check = bins[:10]
+
+    for bin in bins_to_check:
+        bin_date = get_date_from_bin(bin)
+
+        # Get the oldest cached date among all keys
+        oldest_cached = min(result.values()) if result else None
+        # Skip if this bin is older than what we already have cached
+        if oldest_cached and bin_date <= oldest_cached:
+            break
+
+        url = f"{BASE_URL}/has_products/{bin}"
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+
+            # Update any keys that are true and newer than cached
+            for key in CLASSIFICATION_OUTPUT_GAUGES:
+                if data.get(key, False):
+                    if not result.get(key) or bin_date > result[key]:
+                        result[key] = bin_date
+                        # Update cache
+                        classification_cache[(dataset, key)] = bin_date
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 500:
+                continue
+            else:
+                raise
+
+    # If still no data found, cache that we checked
+    if not result:
+        for key in CLASSIFICATION_OUTPUT_GAUGES:
+            classification_cache[(dataset, key)] = 0
         return None
-    # Example response: {"has_blobs": true, "has_features": true, "has_class_scores": true}
-    return data
+
+    return result
 
 
 def update_classification_output_metrics(dataset):
@@ -150,10 +199,10 @@ def update_classification_output_metrics(dataset):
     if output is None:
         # output will be None if all three products are False,
         # create output with all false values
-        output = {key: False for key in CLASSIFICATION_OUTPUT_GAUGES}
+        output = {key: 0 for key in CLASSIFICATION_OUTPUT_GAUGES}
     for key in CLASSIFICATION_OUTPUT_GAUGES:
-        # Set gauge to 1 if true, 0 if false
-        value = 1 if output.get(key, False) else 0
+        # Set gauge to 0 if false
+        value = output.get(key, 0)
         CLASSIFICATION_OUTPUT_GAUGES[key].labels(dataset=dataset).set(value)
 
 
@@ -161,14 +210,21 @@ def main():
     """Main function to start the Prometheus exporter."""
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
+    while True:
+        try:
+            # Fetch and update metrics for all datasets
+            for dataset in get_dataset_list():  # skip first dataset for testing
 
-    # Fetch and update metrics for all datasets
-    for dataset in get_dataset_list():
-        for metric in TIMELINE_METRICS:
-            latest_value, latest_value_time = fetch_latest_data(metric, dataset)
-            if latest_value is not None and latest_value_time is not None:
-                update_metric(metric, dataset, latest_value, latest_value_time)
-        update_classification_output_metrics(dataset)
+                for metric in TIMELINE_METRICS:
+                    latest_value, latest_value_time = fetch_latest_data(metric, dataset)
+                    if latest_value is not None and latest_value_time is not None:
+                        update_metric(metric, dataset, latest_value, latest_value_time)
+                update_classification_output_metrics(dataset)
+        except Exception as e:
+            # log error but keep running
+            print(f"Error: {e}")
+
+        time.sleep(900)  # wait 15 minutes
 
 
 if __name__ == "__main__":
