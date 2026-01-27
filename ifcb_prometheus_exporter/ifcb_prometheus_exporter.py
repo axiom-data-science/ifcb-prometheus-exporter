@@ -133,9 +133,9 @@ def fetch_bins(dataset):
 def get_date_from_bin(bin):
     """Extract date from bin name."""
     # bin example D20260114T160653_IFCB160
-    match = re.search(r"D(\d{8})T", bin)
+    match = re.search(r"(\d{8})T(\d{6})", bin)
     if match:
-        return match.group(1)
+        return datetime.strptime(match.group(0), "%Y%m%dT%H%M%S").timestamp()
     else:
         raise ValueError(f"Invalid bin format: {bin}")
 
