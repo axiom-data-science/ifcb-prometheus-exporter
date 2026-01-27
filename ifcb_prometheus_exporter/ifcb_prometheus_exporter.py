@@ -3,12 +3,10 @@
 import argparse
 import re
 import time
-
 from datetime import datetime
 from typing import Dict, Tuple
 
 import requests
-
 from prometheus_client import Gauge, start_http_server
 
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
