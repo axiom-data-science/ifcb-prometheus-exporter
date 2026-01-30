@@ -47,18 +47,18 @@ TIMELINE_METRICS = {
 
 # Add gauges for data existence checks
 CLASSIFICATION_OUTPUT_GAUGES = {
-    "has_blobs": Gauge(
-        "ifcb_has_blobs",
+    "latest_blobs_timestamp": Gauge(
+        "ifcb_latest_blobs_timestamp",
         "Last date blobs exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
-    "has_features": Gauge(
-        "ifcb_has_features",
+    "latest_features_timestamp": Gauge(
+        "ifcb_latest_features_timestamp",
         "Last date features exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
-    "has_class_scores": Gauge(
-        "ifcb_has_class_scores",
+    "latest_class_scores_timestamp": Gauge(
+        "ifcb_latest_class_scores_timestamp",
         "Last date class scores exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
