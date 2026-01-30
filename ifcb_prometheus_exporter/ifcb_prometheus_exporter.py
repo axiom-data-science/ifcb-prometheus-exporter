@@ -21,10 +21,17 @@ parser.add_argument(
     default=8000,
     help="Port to expose Prometheus metrics on (default: 8000)",
 )
+parser.add_argument(
+    "--interval",
+    type=int,
+    default=900,
+    help="Interval in seconds between metric updates (default: 900)",
+)
 args = parser.parse_args()
 
 BASE_URL = args.base_url
 PORT = args.port
+INTERVAL = args.interval
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -221,7 +228,7 @@ def main():
             # log error but keep running
             print(f"Error: {e}")
 
-        time.sleep(900)  # wait 15 minutes
+        time.sleep(INTERVAL)
 
 
 if __name__ == "__main__":

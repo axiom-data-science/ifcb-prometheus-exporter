@@ -48,7 +48,7 @@ Usage Example
 
 To run the exporter and expose metrics on port 8000, you must specify the base URL for the IFCB API using the ``--base-url`` argument::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --port 8000
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api
 
 Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the provided base URL for data collection.
 
@@ -57,6 +57,10 @@ The following  are a list of the base URLs that can be used with this exporter:
    2. for WHOI: https://ifcb-data.whoi.edu/api
    3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
    4. for HABON: https://habon-ifcb.whoi.edu/api
+
+Additionall the loop interval and the port can be specified with the ``--interval`` and ``--port`` arguments respectively. The default loop interval is 900 seconds and the default port is 8000.::
+
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000
 
 Metrics Returned
 -----------------
