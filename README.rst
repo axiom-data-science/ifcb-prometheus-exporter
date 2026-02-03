@@ -66,14 +66,13 @@ Metrics Returned
 -----------------
 The exporter provides the following metrics:
 - `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp)
-
+- `is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
 - `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp)
 - `ifcb_latest_blobs_lag{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (hours), or 0 if none exist
 - `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp)
 - `ifcb_latest_features_lag{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (hours), or 0 if none exist
 - `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp)
 - `ifcb_latest_class_scores_lag{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (hours), or 0 if none exist
-
 - `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
 - `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
 - `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C

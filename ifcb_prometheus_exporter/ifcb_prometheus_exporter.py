@@ -74,7 +74,7 @@ CLASSIFICATION_OUTPUT_GAUGES = {
     ),
     "latest_blobs_lag": Gauge(
         "ifcb_latest_blobs_lag",
-        "Lag time for the latest blobs for dataset (hours), or 0 if none exist",
+        "Lag time for the latest blobs for dataset (hours), or 100000 if none exist",
         ["dataset"],
     ),
     "latest_features_timestamp": Gauge(
@@ -84,7 +84,7 @@ CLASSIFICATION_OUTPUT_GAUGES = {
     ),
     "latest_features_lag": Gauge(
         "ifcb_latest_features_lag",
-        "Lag time for the latest features for dataset (hours), or 0 if none exist",
+        "Lag time for the latest features for dataset (hours), or 100000 if none exist",
         ["dataset"],
     ),
     "latest_class_scores_timestamp": Gauge(
@@ -94,12 +94,12 @@ CLASSIFICATION_OUTPUT_GAUGES = {
     ),
     "latest_class_scores_lag": Gauge(
         "ifcb_latest_class_scores_lag",
-        "Lag time for the latest class scores for dataset (hours), or 0 if none exist",
+        "Lag time for the latest class scores for dataset (hours), or 100000 if none exist",
         ["dataset"],
     ),
     "is_dataset_up_to_date": Gauge(
         "ifcb_is_dataset_up_to_date",
-        "Indicates if the dataset is lagging (1) or up-to-date (0)",
+        "Indicates if the dataset is lagging (0) or up-to-date (1)",
         ["dataset"],
     ),
 }
@@ -249,28 +249,28 @@ def check_classification_output(dataset):
                 )
                 if data.get(data_key, False):
                     # if we don't have a value yet, or this bin is newer than what we have in cache
-                    if not result.get(key) or bin_date > result[key]:
+                    if not result.get(key) or bin_date > result.get(key, 0):
                         # Update result
                         if "timestamp" in key:
                             result[key] = bin_date
                             # Update cache
                             classification_cache[(dataset, key)] = bin_date
                         elif "lag" in key:
-                            # Calculate lag in hours
-                            # current time - bin_date
-                            lag_hours = (time.time() - bin_date) / 3600.0
+                            # Calculate lag in hours: latest_bin_timestamp - product timestamp
+                            lag_hours = (
+                                result["latest_bin_timestamp"] - bin_date
+                            ) / 3600.0
                             # Update result
                             result[key] = lag_hours
                             # Update cache
                             classification_cache[(dataset, key)] = lag_hours
                         elif "is_dataset_up_to_date" in key:
-                            # Define lag threshold (e.g., 24 hours)
-                            lag_threshold_hours = LAG_THRESHOLD_HOURS
-                            # Calculate lag in hours
-                            # current time - bin_date
-                            lag_hours = (time.time() - bin_date) / 3600.0
+                            # Calculate lag in hours: latest_bin_timestamp - product timestamp
+                            lag_hours = (
+                                result["latest_bin_timestamp"] - bin_date
+                            ) / 3600.0
                             # Determine if lagging
-                            is_lagging = 1 if lag_hours > lag_threshold_hours else 0
+                            is_lagging = 0 if lag_hours > LAG_THRESHOLD_HOURS else 1
                             # Update result
                             result[key] = is_lagging
                             # Update cache
@@ -285,7 +285,11 @@ def check_classification_output(dataset):
     # If still no data found, cache that we checked
     if not result:
         for key in CLASSIFICATION_OUTPUT_GAUGES:
-            classification_cache[(dataset, key)] = 0
+            # Set lag metrics to 100000 to indicate no data (vs 0 which means current)
+            if "_lag" in key:
+                classification_cache[(dataset, key)] = 100000
+            else:
+                classification_cache[(dataset, key)] = 0
         return None
 
     return result
@@ -294,13 +298,13 @@ def check_classification_output(dataset):
 def update_classification_output_metrics(dataset):
     """Update Prometheus gauges for data existence for a dataset."""
     output = check_classification_output(dataset)
-    if output is None:
-        # output will be None if all three products are False,
-        # create output with all false values
-        output = {key: 0 for key in CLASSIFICATION_OUTPUT_GAUGES}
+
     for key in CLASSIFICATION_OUTPUT_GAUGES:
-        # Set gauge to 0 if not found
-        value = output.get(key, 0)
+        # Set gauge: 100000 for lag metrics if not found (no data), 0 for timestamps
+        if output is None:
+            value = 100000 if "_lag" in key else 0
+        else:
+            value = output.get(key, 100000 if "_lag" in key else 0)
         CLASSIFICATION_OUTPUT_GAUGES[key].labels(dataset=dataset).set(value)
 
 
