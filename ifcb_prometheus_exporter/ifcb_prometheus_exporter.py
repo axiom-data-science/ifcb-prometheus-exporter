@@ -279,21 +279,9 @@ def check_classification_output(dataset):
                 result[lag_key] = 100000
                 classification_cache[(dataset, lag_key)] = 100000
 
-        # Calculate is_dataset_up_to_date based on the maximum lag (excluding 100000)
-        lags = [
-            result.get("latest_blobs_lag", 100000),
-            result.get("latest_features_lag", 100000),
-            result.get("latest_class_scores_lag", 100000),
-        ]
-        # Filter out 100000 (no data)
-        real_lags = [lag for lag in lags if lag < 100000]
-
-        if real_lags:
-            max_lag = max(real_lags)
-            is_lagging = 1 if max_lag > LAG_THRESHOLD_HOURS else 0
-        else:
-            # No products exist, so not lagging
-            is_lagging = 0
+        # Calculate is_dataset_up_to_date: compare latest bin to current time
+        bin_lag_hours = (time.time() - result["latest_bin_timestamp"]) / 3600.0
+        is_lagging = 1 if bin_lag_hours > LAG_THRESHOLD_HOURS else 0
 
         result["is_dataset_up_to_date"] = is_lagging
         classification_cache[(dataset, "is_dataset_up_to_date")] = is_lagging
