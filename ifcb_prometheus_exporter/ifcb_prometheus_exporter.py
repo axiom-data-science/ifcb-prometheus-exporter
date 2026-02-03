@@ -1,12 +1,19 @@
 """Prometheus metrics for IFCB exporter."""
 
 import argparse
+import logging
 import time
 from datetime import datetime
 from typing import Dict, Tuple
 
 import requests
 from prometheus_client import Gauge, start_http_server
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
@@ -253,7 +260,12 @@ def check_classification_output(dataset):
                         classification_cache[(dataset, timestamp_key)] = bin_date
 
         except requests.exceptions.HTTPError as e:
+            # If we get a 500 or 502 error, skip this bin and continue checking older bins
+            # this error occurs when the api is missing all three products for a bin
+            # but we want to keep checking older bins in case they have products
             if e.response.status_code == 500:
+                continue
+            if e.response.status_code == 502:
                 continue
             else:
                 raise
@@ -314,21 +326,33 @@ def update_classification_output_metrics(dataset):
 
 def main():
     """Main function to start the Prometheus exporter."""
+    logger.info(f"Starting IFCB Prometheus Exporter on port {PORT}")
+    logger.info(f"Base URL: {BASE_URL}")
+    logger.info(f"Update interval: {INTERVAL} seconds")
+    logger.info(f"Lag threshold: {LAG_THRESHOLD_HOURS} hours")
+    logger.info(f"Lookback period: {LOOKBACK_DAYS} days")
+
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
     while True:
         try:
             # Fetch and update metrics for all datasets
-            for dataset in get_dataset_list():  # skip first dataset for testing
+            datasets = get_dataset_list()
+            logger.info(f"Fetching metrics for {len(datasets)} datasets")
+
+            for dataset in datasets:
+                logger.debug(f"Processing dataset: {dataset}")
 
                 for metric in TIMELINE_METRICS:
                     latest_value, latest_value_time = fetch_latest_data(metric, dataset)
                     if latest_value is not None and latest_value_time is not None:
                         update_metric(metric, dataset, latest_value, latest_value_time)
                 update_classification_output_metrics(dataset)
+
+            logger.info("Successfully updated metrics for all datasets")
         except Exception as e:
             # log error but keep running
-            print(f"Error: {e}")
+            logger.error(f"Error updating metrics: {e}", exc_info=True)
 
         time.sleep(INTERVAL)
 
