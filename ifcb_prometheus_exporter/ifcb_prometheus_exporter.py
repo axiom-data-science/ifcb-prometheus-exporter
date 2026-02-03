@@ -1,8 +1,6 @@
 """Prometheus metrics for IFCB exporter."""
 
 import argparse
-
-# import re
 import time
 from datetime import datetime
 from typing import Dict, Tuple
@@ -182,12 +180,12 @@ def check_classification_output(dataset):
     """Find the most recent date where each classification output exists for a dataset."""
     bins = fetch_bins(dataset)
 
-    # Initialize timestamp result with cached values if they exist
+    # Initialize timestamp result with cached values if they exist and are not 0
     result = {}
     for key in CLASSIFICATION_OUTPUT_GAUGES:
         if "timestamp" in key:
             cached_value = classification_cache.get((dataset, key))
-            if cached_value:
+            if cached_value and cached_value > 0:  # Ignore 0 (no data) values
                 result[key] = cached_value
 
     # Set latest_bin_timestamp to the most recent bin if bins exist
@@ -196,14 +194,17 @@ def check_classification_output(dataset):
         result["latest_bin_timestamp"] = latest_bin_timestamp
         classification_cache[(dataset, "latest_bin_timestamp")] = latest_bin_timestamp
 
-    # if we don't have all three product timestamps cached, check all bins
+    # if we don't have all three product timestamps cached (or they're 0), check all bins
     product_timestamps = [
         k
         for k in CLASSIFICATION_OUTPUT_GAUGES
         if "timestamp" in k and k != "latest_bin_timestamp"
     ]
     cached_product_timestamps = [
-        k for k in product_timestamps if (dataset, k) in classification_cache
+        k
+        for k in product_timestamps
+        if (dataset, k) in classification_cache
+        and classification_cache[(dataset, k)] > 0  # Must have real data, not 0
     ]
 
     if len(cached_product_timestamps) < len(product_timestamps):
@@ -221,8 +222,15 @@ def check_classification_output(dataset):
             bins_to_check = bins
 
     for bin, bin_date in bins_to_check.items():
-        # Get the oldest cached date among all keys
-        oldest_cached = min(result.values()) if result else None
+        # Get the oldest cached product timestamp (exclude latest_bin_timestamp)
+        product_timestamps_in_result = [
+            v
+            for k, v in result.items()
+            if k != "latest_bin_timestamp" and "timestamp" in k and v > 0
+        ]
+        oldest_cached = (
+            min(product_timestamps_in_result) if product_timestamps_in_result else None
+        )
         # Stop checking if this bin is older than our cached data (bins are newest-to-oldest)
         if oldest_cached and bin_date <= oldest_cached:
             break
@@ -233,48 +241,16 @@ def check_classification_output(dataset):
             response.raise_for_status()
             data = response.json()
 
-            # Update any keys that are true and newer than cached
-            for key in CLASSIFICATION_OUTPUT_GAUGES:
-                # Skip latest_bin_timestamp - already handled above
-                if key == "latest_bin_timestamp":
-                    continue
+            # Check each product type (blobs, features, class_scores)
+            for product in ["blobs", "features", "class_scores"]:
+                api_key = f"has_{product}"
+                timestamp_key = f"latest_{product}_timestamp"
 
-                # if the product exists for this bin
-                # data shows 'has_blobs', 'has_features', 'has_class_scores'
-                # convert key to match
-                data_key = (
-                    key.replace("latest_", "has_")
-                    .replace("_timestamp", "")
-                    .replace("_lag", "")
-                )
-                if data.get(data_key, False):
-                    # if we don't have a value yet, or this bin is newer than what we have in cache
-                    if not result.get(key) or bin_date > result.get(key, 0):
-                        # Update result
-                        if "timestamp" in key:
-                            result[key] = bin_date
-                            # Update cache
-                            classification_cache[(dataset, key)] = bin_date
-                        elif "lag" in key:
-                            # Calculate lag in hours: latest_bin_timestamp - product timestamp
-                            lag_hours = (
-                                result["latest_bin_timestamp"] - bin_date
-                            ) / 3600.0
-                            # Update result
-                            result[key] = lag_hours
-                            # Update cache
-                            classification_cache[(dataset, key)] = lag_hours
-                        elif "is_dataset_up_to_date" in key:
-                            # Calculate lag in hours: latest_bin_timestamp - product timestamp
-                            lag_hours = (
-                                result["latest_bin_timestamp"] - bin_date
-                            ) / 3600.0
-                            # Determine if lagging
-                            is_lagging = 0 if lag_hours > LAG_THRESHOLD_HOURS else 1
-                            # Update result
-                            result[key] = is_lagging
-                            # Update cache
-                            classification_cache[(dataset, key)] = is_lagging
+                if data.get(api_key, False):
+                    # If we don't have this timestamp yet, or this bin is newer
+                    if timestamp_key not in result or bin_date > result[timestamp_key]:
+                        result[timestamp_key] = bin_date
+                        classification_cache[(dataset, timestamp_key)] = bin_date
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 500:
@@ -282,7 +258,47 @@ def check_classification_output(dataset):
             else:
                 raise
 
-    # If still no data found, cache that we checked
+    # Calculate lag and up_to_date metrics based on timestamps we found
+    if "latest_bin_timestamp" in result:
+        for product in ["blobs", "features", "class_scores"]:
+            timestamp_key = f"latest_{product}_timestamp"
+            lag_key = f"latest_{product}_lag"
+
+            if timestamp_key in result:
+                # Calculate lag: latest_bin_timestamp - product timestamp
+                lag_hours = (
+                    result["latest_bin_timestamp"] - result[timestamp_key]
+                ) / 3600.0
+                result[lag_key] = lag_hours
+                classification_cache[(dataset, lag_key)] = lag_hours
+            else:
+                # No product found after checking bins, cache timestamp as 0
+                result[timestamp_key] = 0
+                classification_cache[(dataset, timestamp_key)] = 0
+                # Set lag to 100000
+                result[lag_key] = 100000
+                classification_cache[(dataset, lag_key)] = 100000
+
+        # Calculate is_dataset_up_to_date based on the maximum lag (excluding 100000)
+        lags = [
+            result.get("latest_blobs_lag", 100000),
+            result.get("latest_features_lag", 100000),
+            result.get("latest_class_scores_lag", 100000),
+        ]
+        # Filter out 100000 (no data)
+        real_lags = [lag for lag in lags if lag < 100000]
+
+        if real_lags:
+            max_lag = max(real_lags)
+            is_lagging = 1 if max_lag > LAG_THRESHOLD_HOURS else 0
+        else:
+            # No products exist, so not lagging
+            is_lagging = 0
+
+        result["is_dataset_up_to_date"] = is_lagging
+        classification_cache[(dataset, "is_dataset_up_to_date")] = is_lagging
+
+    # If still no data found (no bins), cache that we checked
     if not result:
         for key in CLASSIFICATION_OUTPUT_GAUGES:
             # Set lag metrics to 100000 to indicate no data (vs 0 which means current)
