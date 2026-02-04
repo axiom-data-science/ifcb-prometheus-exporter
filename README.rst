@@ -58,21 +58,21 @@ The following  are a list of the base URLs that can be used with this exporter:
    3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
    4. for HABON: https://habon-ifcb.whoi.edu/api
 
-Additionall the loop interval and the port can be specified with the ``--interval`` and ``--port`` arguments respectively. The default loop interval is 900 seconds and the default port is 8000.::
+Additionally, the loop interval, port, lag threshold, and lookback period can be specified with arguments. The defaults are: interval=900 seconds, port=8000, lag-threshold-seconds=86400 (24 hours), lookback-seconds=1209600 (14 days).::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000 --lag-threshold-seconds 43200 --lookback-seconds 604800
 
 Metrics Returned
 -----------------
 The exporter provides the following metrics:
-- `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp)
-- `is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
-- `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp)
-- `ifcb_latest_blobs_lag{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (hours), or 0 if none exist
-- `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp)
-- `ifcb_latest_features_lag{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (hours), or 0 if none exist
-- `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp)
-- `ifcb_latest_class_scores_lag{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (hours), or 0 if none exist
+- `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
+- `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_blobs_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (seconds), or -1 if none exist
+- `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_features_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (seconds), or -1 if none exist
+- `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_class_scores_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (seconds), or -1 if none exist
 - `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
 - `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
 - `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C

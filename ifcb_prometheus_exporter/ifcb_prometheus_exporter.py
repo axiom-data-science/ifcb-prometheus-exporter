@@ -34,24 +34,24 @@ parser.add_argument(
     help="Interval in seconds between metric updates (default: 900)",
 )
 parser.add_argument(
-    "--lag-threshold-hours",
+    "--lag-threshold-seconds",
     type=int,
-    default=24,
-    help="Lag threshold in hours to determine if dataset is up-to-date (default: 24)",
+    default=86400,
+    help="Lag threshold in seconds to determine if dataset is up-to-date (default: 86400)",
 )
 parser.add_argument(
-    "--lookback-days",
+    "--lookback-seconds",
     type=int,
-    default=14,
-    help="Number of days to look back for bins (default: 14)",
+    default=1209600,
+    help="Number of seconds to look back for bins (default: 1209600, which is 14 days)",
 )
 args = parser.parse_args()
 
 BASE_URL = args.base_url
 PORT = args.port
 INTERVAL = args.interval
-LAG_THRESHOLD_HOURS = args.lag_threshold_hours
-LOOKBACK_DAYS = args.lookback_days
+LAG_THRESHOLD_SECONDS = args.lag_threshold_seconds
+LOOKBACK_SECONDS = args.lookback_seconds
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -77,9 +77,9 @@ CLASSIFICATION_OUTPUT_GAUGES = {
         "Last date blobs exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
-    "latest_blobs_lag": Gauge(
-        "ifcb_latest_blobs_lag",
-        "Lag time for the latest blobs for dataset (hours), or 100000 if none exist",
+    "latest_blobs_lag_seconds": Gauge(
+        "ifcb_latest_blobs_lag_seconds",
+        "Lag time for the latest blobs for dataset (seconds), or -1 if none exist",
         ["dataset"],
     ),
     "latest_features_timestamp": Gauge(
@@ -87,9 +87,9 @@ CLASSIFICATION_OUTPUT_GAUGES = {
         "Last date features exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
-    "latest_features_lag": Gauge(
-        "ifcb_latest_features_lag",
-        "Lag time for the latest features for dataset (hours), or 100000 if none exist",
+    "latest_features_lag_seconds": Gauge(
+        "ifcb_latest_features_lag_seconds",
+        "Lag time for the latest features for dataset (seconds), or -1 if none exist",
         ["dataset"],
     ),
     "latest_class_scores_timestamp": Gauge(
@@ -97,9 +97,9 @@ CLASSIFICATION_OUTPUT_GAUGES = {
         "Last date class scores exist for dataset (Unix timestamp), or 0 if none exist",
         ["dataset"],
     ),
-    "latest_class_scores_lag": Gauge(
-        "ifcb_latest_class_scores_lag",
-        "Lag time for the latest class scores for dataset (hours), or 100000 if none exist",
+    "latest_class_scores_lag_seconds": Gauge(
+        "ifcb_latest_class_scores_lag_seconds",
+        "Lag time for the latest class scores for dataset (seconds), or -1 if none exist",
         ["dataset"],
     ),
     "is_dataset_up_to_date": Gauge(
@@ -217,16 +217,13 @@ def check_classification_output(dataset):
     if len(cached_product_timestamps) < len(product_timestamps):
         bins_to_check = bins
     else:
-        # Only check amount of bins for days in lookback_days
-        lookback = time.time() - (LOOKBACK_DAYS * 24 * 3600)  # days to seconds
+        # Only check amount of bins for seconds in lookback_seconds from latest bin
+        lookback = latest_bin_timestamp - LOOKBACK_SECONDS  # seconds
         bins_to_check = {
             pid: sample_time
             for pid, sample_time in bins.items()
             if sample_time >= lookback
         }
-        # if no bins in last two weeks, check all bins
-        if not bins_to_check:
-            bins_to_check = bins
 
     for bin, bin_date in bins_to_check.items():
         # Get the oldest cached product timestamp (exclude latest_bin_timestamp)
@@ -274,26 +271,24 @@ def check_classification_output(dataset):
     if "latest_bin_timestamp" in result:
         for product in ["blobs", "features", "class_scores"]:
             timestamp_key = f"latest_{product}_timestamp"
-            lag_key = f"latest_{product}_lag"
+            lag_key = f"latest_{product}_lag_seconds"
 
             if timestamp_key in result:
                 # Calculate lag: latest_bin_timestamp - product timestamp
-                lag_hours = (
-                    result["latest_bin_timestamp"] - result[timestamp_key]
-                ) / 3600.0
-                result[lag_key] = lag_hours
-                classification_cache[(dataset, lag_key)] = lag_hours
+                lag_seconds = result["latest_bin_timestamp"] - result[timestamp_key]
+                result[lag_key] = lag_seconds
+                classification_cache[(dataset, lag_key)] = lag_seconds
             else:
                 # No product found after checking bins, cache timestamp as 0
                 result[timestamp_key] = 0
                 classification_cache[(dataset, timestamp_key)] = 0
-                # Set lag to 100000
-                result[lag_key] = 100000
-                classification_cache[(dataset, lag_key)] = 100000
+                # Set lag to -1 to indicate no data
+                result[lag_key] = -1
+                classification_cache[(dataset, lag_key)] = -1
 
         # Calculate is_dataset_up_to_date: compare latest bin to current time
-        bin_lag_hours = (time.time() - result["latest_bin_timestamp"]) / 3600.0
-        is_lagging = 1 if bin_lag_hours > LAG_THRESHOLD_HOURS else 0
+        bin_lag_seconds = time.time() - result["latest_bin_timestamp"]
+        is_lagging = int(bin_lag_seconds > LAG_THRESHOLD_SECONDS)
 
         result["is_dataset_up_to_date"] = is_lagging
         classification_cache[(dataset, "is_dataset_up_to_date")] = is_lagging
@@ -301,9 +296,9 @@ def check_classification_output(dataset):
     # If still no data found (no bins), cache that we checked
     if not result:
         for key in CLASSIFICATION_OUTPUT_GAUGES:
-            # Set lag metrics to 100000 to indicate no data (vs 0 which means current)
+            # Set lag metrics to -1 to indicate no data (vs 0 which means current)
             if "_lag" in key:
-                classification_cache[(dataset, key)] = 100000
+                classification_cache[(dataset, key)] = -1
             else:
                 classification_cache[(dataset, key)] = 0
         return None
@@ -316,11 +311,11 @@ def update_classification_output_metrics(dataset):
     output = check_classification_output(dataset)
 
     for key in CLASSIFICATION_OUTPUT_GAUGES:
-        # Set gauge: 100000 for lag metrics if not found (no data), 0 for timestamps
+        # Set gauge: -1 for lag metrics if not found (no data), 0 for timestamps
         if output is None:
-            value = 100000 if "_lag" in key else 0
+            value = -1 if "_lag" in key else 0
         else:
-            value = output.get(key, 100000 if "_lag" in key else 0)
+            value = output.get(key, -1 if "_lag" in key else 0)
         CLASSIFICATION_OUTPUT_GAUGES[key].labels(dataset=dataset).set(value)
 
 
@@ -329,8 +324,8 @@ def main():
     logger.info(f"Starting IFCB Prometheus Exporter on port {PORT}")
     logger.info(f"Base URL: {BASE_URL}")
     logger.info(f"Update interval: {INTERVAL} seconds")
-    logger.info(f"Lag threshold: {LAG_THRESHOLD_HOURS} hours")
-    logger.info(f"Lookback period: {LOOKBACK_DAYS} days")
+    logger.info(f"Lag threshold: {LAG_THRESHOLD_SECONDS} seconds")
+    logger.info(f"Lookback period: {LOOKBACK_SECONDS} seconds")
 
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
