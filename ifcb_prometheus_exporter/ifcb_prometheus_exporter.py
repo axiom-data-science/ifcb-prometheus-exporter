@@ -9,12 +9,6 @@ from typing import Dict, Tuple
 import requests
 from prometheus_client import Gauge, start_http_server
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
     "--base-url",
@@ -40,18 +34,34 @@ parser.add_argument(
     help="Lag threshold in seconds to determine if dataset is up-to-date (default: 86400)",
 )
 parser.add_argument(
-    "--lookback-seconds",
+    "--lookback-bins",
     type=int,
-    default=1209600,
-    help="Number of seconds to look back for bins (default: 1209600, which is 14 days)",
+    default=20,
+    help="Number of bins to look back for products (default: 20)",
+)
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    help="Logging level (default: INFO)",
 )
 args = parser.parse_args()
+
+# Configure logging
+LOG_LEVEL = getattr(logging, args.log_level.upper(), None)
+
+if not isinstance(LOG_LEVEL, int):
+    raise ValueError(f"Invalid log level: {args.log_level}")
+
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 BASE_URL = args.base_url
 PORT = args.port
 INTERVAL = args.interval
 LAG_THRESHOLD_SECONDS = args.lag_threshold_seconds
-LOOKBACK_SECONDS = args.lookback_seconds
+LOOKBACK_BINS = args.lookback_bins
+
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -207,25 +217,15 @@ def check_classification_output(dataset):
         for k in CLASSIFICATION_OUTPUT_GAUGES
         if "timestamp" in k and k != "latest_bin_timestamp"
     ]
-    cached_product_timestamps = [
-        k
-        for k in product_timestamps
-        if (dataset, k) in classification_cache
-        and classification_cache[(dataset, k)] > 0  # Must have real data, not 0
-    ]
 
-    if len(cached_product_timestamps) < len(product_timestamps):
-        bins_to_check = bins
-    else:
-        # Only check amount of bins for seconds in lookback_seconds from latest bin
-        lookback = latest_bin_timestamp - LOOKBACK_SECONDS  # seconds
-        bins_to_check = {
-            pid: sample_time
-            for pid, sample_time in bins.items()
-            if sample_time >= lookback
-        }
+    # Only check the last LOOKBACK_BINS bins for products
+    bins_to_check = {
+        pid: bins[pid] for pid in sorted(bins.keys(), reverse=True)[0:LOOKBACK_BINS]
+    }
 
-    for bin, bin_date in bins_to_check.items():
+    for bin in sorted(bins_to_check.keys(), reverse=True):
+        bin_date = bins_to_check[bin]
+
         # Get the oldest cached product timestamp (exclude latest_bin_timestamp)
         product_timestamps_in_result = [
             v
@@ -325,7 +325,7 @@ def main():
     logger.info(f"Base URL: {BASE_URL}")
     logger.info(f"Update interval: {INTERVAL} seconds")
     logger.info(f"Lag threshold: {LAG_THRESHOLD_SECONDS} seconds")
-    logger.info(f"Lookback period: {LOOKBACK_SECONDS} seconds")
+    logger.info(f"Lookback bins: {LOOKBACK_BINS}")
 
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
@@ -336,7 +336,7 @@ def main():
             logger.info(f"Fetching metrics for {len(datasets)} datasets")
 
             for dataset in datasets:
-                logger.debug(f"Processing dataset: {dataset}")
+                logger.info(f"Processing dataset: {dataset}")
 
                 for metric in TIMELINE_METRICS:
                     latest_value, latest_value_time = fetch_latest_data(metric, dataset)
