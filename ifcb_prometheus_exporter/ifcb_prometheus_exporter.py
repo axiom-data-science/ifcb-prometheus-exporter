@@ -9,12 +9,6 @@ from typing import Dict, Tuple
 import requests
 from prometheus_client import Gauge, start_http_server
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
     "--base-url",
@@ -40,18 +34,42 @@ parser.add_argument(
     help="Lag threshold in seconds to determine if dataset is up-to-date (default: 86400)",
 )
 parser.add_argument(
-    "--lookback-seconds",
+    "--lookback-bins",
     type=int,
-    default=1209600,
-    help="Number of seconds to look back for bins (default: 1209600, which is 14 days)",
+    default=20,
+    help="Number of bins to look back for products (default: 20)",
+)
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    help="Logging level (default: INFO)",
+)
+parser.add_argument(
+    "--datasets",
+    type=str,
+    help="CSV list of specific datasets (default all datasets in specified ifcbdb",
 )
 args = parser.parse_args()
+
+# Configure logging
+LOG_LEVEL = getattr(logging, args.log_level.upper(), None)
+
+if not isinstance(LOG_LEVEL, int):
+    raise ValueError(f"Invalid log level: {args.log_level}")
+
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 BASE_URL = args.base_url
 PORT = args.port
 INTERVAL = args.interval
 LAG_THRESHOLD_SECONDS = args.lag_threshold_seconds
-LOOKBACK_SECONDS = args.lookback_seconds
+LOOKBACK_BINS = args.lookback_bins
+DATASETS = (
+    sorted([d.strip() for d in args.datasets.split(",")]) if args.datasets else []
+)
+
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -141,6 +159,9 @@ def get_metrics_api_call(metric, ds, res="bin"):
 
 def get_dataset_list():
     """Fetch the list of datasets from the IFCB API."""
+    if DATASETS:
+        return DATASETS
+
     url = f"{BASE_URL}/filter_options?"
     response = requests.get(url)
     response.raise_for_status()
@@ -201,43 +222,37 @@ def check_classification_output(dataset):
         result["latest_bin_timestamp"] = latest_bin_timestamp
         classification_cache[(dataset, "latest_bin_timestamp")] = latest_bin_timestamp
 
-    # if we don't have all three product timestamps cached (or they're 0), check all bins
-    product_timestamps = [
+    # Only check the last LOOKBACK_BINS bins for products
+    bins_to_check = {
+        pid: bins[pid] for pid in sorted(bins.keys(), reverse=True)[0:LOOKBACK_BINS]
+    }
+
+    product_timestamp_keys = [
         k
         for k in CLASSIFICATION_OUTPUT_GAUGES
         if "timestamp" in k and k != "latest_bin_timestamp"
     ]
-    cached_product_timestamps = [
-        k
-        for k in product_timestamps
-        if (dataset, k) in classification_cache
-        and classification_cache[(dataset, k)] > 0  # Must have real data, not 0
-    ]
 
-    if len(cached_product_timestamps) < len(product_timestamps):
-        bins_to_check = bins
-    else:
-        # Only check amount of bins for seconds in lookback_seconds from latest bin
-        lookback = latest_bin_timestamp - LOOKBACK_SECONDS  # seconds
-        bins_to_check = {
-            pid: sample_time
-            for pid, sample_time in bins.items()
-            if sample_time >= lookback
-        }
+    for bin in sorted(bins_to_check.keys(), reverse=True):
+        bin_date = bins_to_check[bin]
 
-    for bin, bin_date in bins_to_check.items():
-        # Get the oldest cached product timestamp (exclude latest_bin_timestamp)
-        product_timestamps_in_result = [
-            v
-            for k, v in result.items()
-            if k != "latest_bin_timestamp" and "timestamp" in k and v > 0
-        ]
-        oldest_cached = (
-            min(product_timestamps_in_result) if product_timestamps_in_result else None
-        )
-        # Stop checking if this bin is older than our cached data (bins are newest-to-oldest)
-        if oldest_cached and bin_date <= oldest_cached:
-            break
+        # check if all products have a timestamp in the result (possibly from cache)
+        if all(k in result and result[k] for k in product_timestamp_keys):
+            # If this bin is older than the oldest product timestamp in results and all products
+            # have a timestamp, stop looking
+
+            # Get the oldest product timestamp(s) in result
+            product_timestamps_in_result = [
+                v for k, v in result.items() if k in product_timestamp_keys and v > 0
+            ]
+            oldest_in_result = (
+                min(product_timestamps_in_result)
+                if product_timestamps_in_result
+                else None
+            )
+            # Stop checking if this bin is older than data in our result (bins are newest-to-oldest)
+            if oldest_in_result and bin_date <= oldest_in_result:
+                break
 
         url = f"{BASE_URL}/has_products/{bin}"
         try:
@@ -325,7 +340,9 @@ def main():
     logger.info(f"Base URL: {BASE_URL}")
     logger.info(f"Update interval: {INTERVAL} seconds")
     logger.info(f"Lag threshold: {LAG_THRESHOLD_SECONDS} seconds")
-    logger.info(f"Lookback period: {LOOKBACK_SECONDS} seconds")
+    logger.info(f"Lookback bins: {LOOKBACK_BINS}")
+    if DATASETS:
+        logger.info(f"Datasets: {', '.join(DATASETS)}")
 
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
@@ -333,10 +350,10 @@ def main():
         try:
             # Fetch and update metrics for all datasets
             datasets = get_dataset_list()
-            logger.info(f"Fetching metrics for {len(datasets)} datasets")
+            logger.info(f"Fetching metrics for {len(datasets)} dataset(s)")
 
             for dataset in datasets:
-                logger.debug(f"Processing dataset: {dataset}")
+                logger.info(f"Processing dataset: {dataset}")
 
                 for metric in TIMELINE_METRICS:
                     latest_value, latest_value_time = fetch_latest_data(metric, dataset)
