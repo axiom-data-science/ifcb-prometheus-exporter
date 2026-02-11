@@ -1,13 +1,13 @@
 """Prometheus metrics for IFCB exporter."""
 
 import argparse
-
+import logging
+import time
 from datetime import datetime
+from typing import Dict, Tuple
 
 import requests
-
 from prometheus_client import Gauge, start_http_server
-
 
 parser = argparse.ArgumentParser(description="IFCB Prometheus Exporter")
 parser.add_argument(
@@ -21,10 +21,55 @@ parser.add_argument(
     default=8000,
     help="Port to expose Prometheus metrics on (default: 8000)",
 )
+parser.add_argument(
+    "--interval",
+    type=int,
+    default=900,
+    help="Interval in seconds between metric updates (default: 900)",
+)
+parser.add_argument(
+    "--lag-threshold-seconds",
+    type=int,
+    default=86400,
+    help="Lag threshold in seconds to determine if dataset is up-to-date (default: 86400)",
+)
+parser.add_argument(
+    "--lookback-bins",
+    type=int,
+    default=20,
+    help="Number of bins to look back for products (default: 20)",
+)
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    help="Logging level (default: INFO)",
+)
+parser.add_argument(
+    "--datasets",
+    type=str,
+    help="CSV list of specific datasets (default all datasets in specified ifcbdb",
+)
 args = parser.parse_args()
+
+# Configure logging
+LOG_LEVEL = getattr(logging, args.log_level.upper(), None)
+
+if not isinstance(LOG_LEVEL, int):
+    raise ValueError(f"Invalid log level: {args.log_level}")
+
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 BASE_URL = args.base_url
 PORT = args.port
+INTERVAL = args.interval
+LAG_THRESHOLD_SECONDS = args.lag_threshold_seconds
+LOOKBACK_BINS = args.lookback_bins
+DATASETS = (
+    sorted([d.strip() for d in args.datasets.split(",")]) if args.datasets else []
+)
+
 
 TIMELINE_METRICS = {
     "size": "Bytes",
@@ -36,6 +81,50 @@ TIMELINE_METRICS = {
     "concentration": "ROIs / ml",
     "n_triggers": "Count",
     "n_images": "Count",
+}
+
+# Add gauges for data existence checks
+CLASSIFICATION_OUTPUT_GAUGES = {
+    "latest_bin_timestamp": Gauge(
+        "ifcb_latest_bin_timestamp",
+        "Last bin date for dataset (Unix timestamp), or 0 if none exist",
+        ["dataset"],
+    ),
+    "latest_blobs_timestamp": Gauge(
+        "ifcb_latest_blobs_timestamp",
+        "Last date blobs exist for dataset (Unix timestamp), or 0 if none exist",
+        ["dataset"],
+    ),
+    "latest_blobs_lag_seconds": Gauge(
+        "ifcb_latest_blobs_lag_seconds",
+        "Lag time for the latest blobs for dataset (seconds), or -1 if none exist",
+        ["dataset"],
+    ),
+    "latest_features_timestamp": Gauge(
+        "ifcb_latest_features_timestamp",
+        "Last date features exist for dataset (Unix timestamp), or 0 if none exist",
+        ["dataset"],
+    ),
+    "latest_features_lag_seconds": Gauge(
+        "ifcb_latest_features_lag_seconds",
+        "Lag time for the latest features for dataset (seconds), or -1 if none exist",
+        ["dataset"],
+    ),
+    "latest_class_scores_timestamp": Gauge(
+        "ifcb_latest_class_scores_timestamp",
+        "Last date class scores exist for dataset (Unix timestamp), or 0 if none exist",
+        ["dataset"],
+    ),
+    "latest_class_scores_lag_seconds": Gauge(
+        "ifcb_latest_class_scores_lag_seconds",
+        "Lag time for the latest class scores for dataset (seconds), or -1 if none exist",
+        ["dataset"],
+    ),
+    "is_dataset_up_to_date": Gauge(
+        "ifcb_is_dataset_up_to_date",
+        "Indicates if the dataset is lagging (0) or up-to-date (1)",
+        ["dataset"],
+    ),
 }
 
 # Gauges with dataset label
@@ -51,6 +140,8 @@ for metric, unit in TIMELINE_METRICS.items():
             ["dataset"],
         ),
     }
+
+classification_cache: Dict[Tuple[str, str], str] = {}  # {(dataset, key): date_string}
 
 
 def update_metric(metric, dataset, latest_value, latest_value_time):
@@ -68,6 +159,9 @@ def get_metrics_api_call(metric, ds, res="bin"):
 
 def get_dataset_list():
     """Fetch the list of datasets from the IFCB API."""
+    if DATASETS:
+        return DATASETS
+
     url = f"{BASE_URL}/filter_options?"
     response = requests.get(url)
     response.raise_for_status()
@@ -93,17 +187,186 @@ def fetch_latest_data(metric, dataset):
     return latest_value, latest_value_time
 
 
+def fetch_bins(dataset):
+    """Fetch the list of bins for a given dataset."""
+    url = f"{BASE_URL}/list_bins?dataset={dataset}"
+    response = requests.get(url)
+    response.raise_for_status()
+    data = response.json()["data"]
+    # return dict of bins and sample_times (converted to Unix timestamps)
+    # sorted by sample_time descending
+    bins = {
+        item["pid"]: int(
+            datetime.strptime(item["sample_time"], "%Y-%m-%dT%H:%M:%SZ").timestamp()
+        )
+        for item in sorted(data, key=lambda x: x["sample_time"], reverse=True)
+    }
+    return bins
+
+
+def check_classification_output(dataset):
+    """Find the most recent date where each classification output exists for a dataset."""
+    bins = fetch_bins(dataset)
+
+    # Initialize timestamp result with cached values if they exist and are not 0
+    result = {}
+    for key in CLASSIFICATION_OUTPUT_GAUGES:
+        if "timestamp" in key:
+            cached_value = classification_cache.get((dataset, key))
+            if cached_value and cached_value > 0:  # Ignore 0 (no data) values
+                result[key] = cached_value
+
+    # Set latest_bin_timestamp to the most recent bin if bins exist
+    if bins:
+        latest_bin_timestamp = next(iter(bins.values()))  # First value in sorted dict
+        result["latest_bin_timestamp"] = latest_bin_timestamp
+        classification_cache[(dataset, "latest_bin_timestamp")] = latest_bin_timestamp
+
+    # Only check the last LOOKBACK_BINS bins for products
+    bins_to_check = {
+        pid: bins[pid] for pid in sorted(bins.keys(), reverse=True)[0:LOOKBACK_BINS]
+    }
+
+    product_timestamp_keys = [
+        k
+        for k in CLASSIFICATION_OUTPUT_GAUGES
+        if "timestamp" in k and k != "latest_bin_timestamp"
+    ]
+
+    for bin in sorted(bins_to_check.keys(), reverse=True):
+        bin_date = bins_to_check[bin]
+
+        # check if all products have a timestamp in the result (possibly from cache)
+        if all(k in result and result[k] for k in product_timestamp_keys):
+            # If this bin is older than the oldest product timestamp in results and all products
+            # have a timestamp, stop looking
+
+            # Get the oldest product timestamp(s) in result
+            product_timestamps_in_result = [
+                v for k, v in result.items() if k in product_timestamp_keys and v > 0
+            ]
+            oldest_in_result = (
+                min(product_timestamps_in_result)
+                if product_timestamps_in_result
+                else None
+            )
+            # Stop checking if this bin is older than data in our result (bins are newest-to-oldest)
+            if oldest_in_result and bin_date <= oldest_in_result:
+                break
+
+        url = f"{BASE_URL}/has_products/{bin}"
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+
+            # Check each product type (blobs, features, class_scores)
+            for product in ["blobs", "features", "class_scores"]:
+                api_key = f"has_{product}"
+                timestamp_key = f"latest_{product}_timestamp"
+
+                if data.get(api_key, False):
+                    # If we don't have this timestamp yet, or this bin is newer
+                    if timestamp_key not in result or bin_date > result[timestamp_key]:
+                        result[timestamp_key] = bin_date
+                        classification_cache[(dataset, timestamp_key)] = bin_date
+
+        except requests.exceptions.HTTPError as e:
+            # If we get a 500 or 502 error, skip this bin and continue checking older bins
+            # this error occurs when the api is missing all three products for a bin
+            # but we want to keep checking older bins in case they have products
+            if e.response.status_code == 500:
+                continue
+            if e.response.status_code == 502:
+                continue
+            else:
+                raise
+
+    # Calculate lag and up_to_date metrics based on timestamps we found
+    if "latest_bin_timestamp" in result:
+        for product in ["blobs", "features", "class_scores"]:
+            timestamp_key = f"latest_{product}_timestamp"
+            lag_key = f"latest_{product}_lag_seconds"
+
+            if timestamp_key in result:
+                # Calculate lag: latest_bin_timestamp - product timestamp
+                lag_seconds = result["latest_bin_timestamp"] - result[timestamp_key]
+                result[lag_key] = lag_seconds
+                classification_cache[(dataset, lag_key)] = lag_seconds
+            else:
+                # No product found after checking bins, cache timestamp as 0
+                result[timestamp_key] = 0
+                classification_cache[(dataset, timestamp_key)] = 0
+                # Set lag to -1 to indicate no data
+                result[lag_key] = -1
+                classification_cache[(dataset, lag_key)] = -1
+
+        # Calculate is_dataset_up_to_date: compare latest bin to current time
+        bin_lag_seconds = time.time() - result["latest_bin_timestamp"]
+        is_lagging = int(bin_lag_seconds > LAG_THRESHOLD_SECONDS)
+
+        result["is_dataset_up_to_date"] = is_lagging
+        classification_cache[(dataset, "is_dataset_up_to_date")] = is_lagging
+
+    # If still no data found (no bins), cache that we checked
+    if not result:
+        for key in CLASSIFICATION_OUTPUT_GAUGES:
+            # Set lag metrics to -1 to indicate no data (vs 0 which means current)
+            if "_lag" in key:
+                classification_cache[(dataset, key)] = -1
+            else:
+                classification_cache[(dataset, key)] = 0
+        return None
+
+    return result
+
+
+def update_classification_output_metrics(dataset):
+    """Update Prometheus gauges for data existence for a dataset."""
+    output = check_classification_output(dataset)
+
+    for key in CLASSIFICATION_OUTPUT_GAUGES:
+        # Set gauge: -1 for lag metrics if not found (no data), 0 for timestamps
+        if output is None:
+            value = -1 if "_lag" in key else 0
+        else:
+            value = output.get(key, -1 if "_lag" in key else 0)
+        CLASSIFICATION_OUTPUT_GAUGES[key].labels(dataset=dataset).set(value)
+
+
 def main():
     """Main function to start the Prometheus exporter."""
+    logger.info(f"Starting IFCB Prometheus Exporter on port {PORT}")
+    logger.info(f"Base URL: {BASE_URL}")
+    logger.info(f"Update interval: {INTERVAL} seconds")
+    logger.info(f"Lag threshold: {LAG_THRESHOLD_SECONDS} seconds")
+    logger.info(f"Lookback bins: {LOOKBACK_BINS}")
+    if DATASETS:
+        logger.info(f"Datasets: {', '.join(DATASETS)}")
+
     # Start Prometheus metrics server on the specified port
     start_http_server(PORT)
+    while True:
+        try:
+            # Fetch and update metrics for all datasets
+            datasets = get_dataset_list()
+            logger.info(f"Fetching metrics for {len(datasets)} dataset(s)")
 
-    # Fetch and update metrics for all datasets
-    for dataset in get_dataset_list():
-        for metric in TIMELINE_METRICS:
-            latest_value, latest_value_time = fetch_latest_data(metric, dataset)
-            if latest_value is not None and latest_value_time is not None:
-                update_metric(metric, dataset, latest_value, latest_value_time)
+            for dataset in datasets:
+                logger.info(f"Processing dataset: {dataset}")
+
+                for metric in TIMELINE_METRICS:
+                    latest_value, latest_value_time = fetch_latest_data(metric, dataset)
+                    if latest_value is not None and latest_value_time is not None:
+                        update_metric(metric, dataset, latest_value, latest_value_time)
+                update_classification_output_metrics(dataset)
+
+            logger.info("Successfully updated metrics for all datasets")
+        except Exception as e:
+            # log error but keep running
+            logger.error(f"Error updating metrics: {e}", exc_info=True)
+
+        time.sleep(INTERVAL)
 
 
 if __name__ == "__main__":

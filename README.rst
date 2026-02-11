@@ -48,7 +48,7 @@ Usage Example
 
 To run the exporter and expose metrics on port 8000, you must specify the base URL for the IFCB API using the ``--base-url`` argument::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --port 8000
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api
 
 Then visit http://localhost:8000/metrics to view the metrics in Prometheus format. The exporter will use the provided base URL for data collection.
 
@@ -57,6 +57,40 @@ The following  are a list of the base URLs that can be used with this exporter:
    2. for WHOI: https://ifcb-data.whoi.edu/api
    3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
    4. for HABON: https://habon-ifcb.whoi.edu/api
+
+Additionally, the loop interval, port, lag threshold, and lookback period can be specified with arguments. The defaults are: interval=900 seconds, port=8000, lag-threshold-seconds=86400 (24 hours), lookback-seconds=1209600 (14 days).::
+
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000 --lag-threshold-seconds 43200 --lookback-seconds 604800
+
+Metrics Returned
+-----------------
+The exporter provides the following metrics:
+- `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
+- `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_blobs_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (seconds), or -1 if none exist
+- `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_features_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (seconds), or -1 if none exist
+- `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp), or 0 if none exist
+- `ifcb_latest_class_scores_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (seconds), or -1 if none exist
+- `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
+- `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
+- `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C
+- `ifcb_temperature_timestamp{dataset="<dataset_name>"}`: Timestamp of latest temperature value
+- `ifcb_humidity_value{dataset="<dataset_name>"}`: Latest humidity in Percentage
+- `ifcb_humidity_timestamp{dataset="<dataset_name>"}`: Timestamp of latest humidity value
+- `ifcb_run_time_value{dataset="<dataset_name>"}`: Latest run_time in Seconds
+- `ifcb_run_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest run_time value
+- `ifcb_look_time_value{dataset="<dataset_name>"}`: Latest look_time in Seconds
+- `ifcb_look_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest look_time value
+- `ifcb_ml_analyzed_value{dataset="<dataset_name>"}`: Latest ml_analyzed in Milliliters
+- `ifcb_ml_analyzed_timestamp{dataset="<dataset_name>"}`: Timestamp of latest ml_analyzed value
+- `ifcb_concentration_value{dataset="<dataset_name>"}`: Latest concentration in ROIs / ml
+- `ifcb_concentration_timestamp{dataset="<dataset_name>"}`: Timestamp of latest concentration value
+- `ifcb_n_triggers_value{dataset="<dataset_name>"}`: Latest n_triggers in Count
+- `ifcb_n_triggers_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_triggers value
+- `ifcb_n_images_value{dataset="<dataset_name>"}`: Latest n_images in Count
+- `ifcb_n_images_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_images value
 
 Prometheus Integration
 ---------------------

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Logging configuration."""
+
 import importlib.resources
 import logging
 import logging.config
-
 
 logger = logging.getLogger("ifcb-prometheus-exporter")
 
