@@ -65,6 +65,7 @@ Additionally, the loop interval, port, lag threshold, and lookback period can be
 Metrics Returned
 -----------------
 The exporter provides the following metrics:
+
 - `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
 - `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
 - `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
