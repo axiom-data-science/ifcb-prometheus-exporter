@@ -66,32 +66,32 @@ Metrics Returned
 -----------------
 The exporter provides the following metrics:
 
-- `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
-- `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
-- `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
-- `ifcb_latest_blobs_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (seconds), or -1 if none exist
-- `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp), or 0 if none exist
-- `ifcb_latest_features_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (seconds), or -1 if none exist
-- `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp), or 0 if none exist
-- `ifcb_latest_class_scores_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (seconds), or -1 if none exist
-- `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
-- `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
-- `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C
-- `ifcb_temperature_timestamp{dataset="<dataset_name>"}`: Timestamp of latest temperature value
-- `ifcb_humidity_value{dataset="<dataset_name>"}`: Latest humidity in Percentage
-- `ifcb_humidity_timestamp{dataset="<dataset_name>"}`: Timestamp of latest humidity value
-- `ifcb_run_time_value{dataset="<dataset_name>"}`: Latest run_time in Seconds
-- `ifcb_run_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest run_time value
-- `ifcb_look_time_value{dataset="<dataset_name>"}`: Latest look_time in Seconds
-- `ifcb_look_time_timestamp{dataset="<dataset_name>"}`: Timestamp of latest look_time value
-- `ifcb_ml_analyzed_value{dataset="<dataset_name>"}`: Latest ml_analyzed in Milliliters
-- `ifcb_ml_analyzed_timestamp{dataset="<dataset_name>"}`: Timestamp of latest ml_analyzed value
-- `ifcb_concentration_value{dataset="<dataset_name>"}`: Latest concentration in ROIs / ml
-- `ifcb_concentration_timestamp{dataset="<dataset_name>"}`: Timestamp of latest concentration value
-- `ifcb_n_triggers_value{dataset="<dataset_name>"}`: Latest n_triggers in Count
-- `ifcb_n_triggers_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_triggers value
-- `ifcb_n_images_value{dataset="<dataset_name>"}`: Latest n_images in Count
-- `ifcb_n_images_timestamp{dataset="<dataset_name>"}`: Timestamp of latest n_images value
+- ``ifcb_latest_bin_timestamp{dataset="<dataset_name>"}``: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
+- ``ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}``: Indicates if the dataset is lagging (0) or up-to-date (1)
+- ``ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}``: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
+- ``ifcb_latest_blobs_lag_seconds{dataset="<dataset_name>"}``: Lag time for the latest blobs for dataset (seconds), or -1 if none exist
+- ``ifcb_latest_features_timestamp{dataset="<dataset_name>"}``: Timestamp of the latest features for the specified dataset (Unix timestamp), or 0 if none exist
+- ``ifcb_latest_features_lag_seconds{dataset="<dataset_name>"}``: Lag time for the latest features for dataset (seconds), or -1 if none exist
+- ``ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}``: Timestamp of the latest class scores for the specified dataset (Unix timestamp), or 0 if none exist
+- ``ifcb_latest_class_scores_lag_seconds{dataset="<dataset_name>"}``: Lag time for the latest class scores for dataset (seconds), or -1 if none exist
+- ``ifcb_size_value{dataset="<dataset_name>"}``: Latest size value of the dataset in Bytes
+- ``ifcb_size_timestamp{dataset="<dataset_name>"}``: Timestamp of latest size value
+- ``ifcb_temperature_value{dataset="<dataset_name>"}``: Latest temperature in Degrees C
+- ``ifcb_temperature_timestamp{dataset="<dataset_name>"}``: Timestamp of latest temperature value
+- ``ifcb_humidity_value{dataset="<dataset_name>"}``: Latest humidity in Percentage
+- ``ifcb_humidity_timestamp{dataset="<dataset_name>"}``: Timestamp of latest humidity value
+- ``ifcb_run_time_value{dataset="<dataset_name>"}``: Latest run_time in Seconds
+- ``ifcb_run_time_timestamp{dataset="<dataset_name>"}``: Timestamp of latest run_time value
+- ``ifcb_look_time_value{dataset="<dataset_name>"}``: Latest look_time in Seconds
+- ``ifcb_look_time_timestamp{dataset="<dataset_name>"}``: Timestamp of latest look_time value
+- ``ifcb_ml_analyzed_value{dataset="<dataset_name>"}``: Latest ml_analyzed in Milliliters
+- ``ifcb_ml_analyzed_timestamp{dataset="<dataset_name>"}``: Timestamp of latest ml_analyzed value
+- ``ifcb_concentration_value{dataset="<dataset_name>"}``: Latest concentration in ROIs / ml
+- ``ifcb_concentration_timestamp{dataset="<dataset_name>"}``: Timestamp of latest concentration value
+- ``ifcb_n_triggers_value{dataset="<dataset_name>"}``: Latest n_triggers in Count
+- ``ifcb_n_triggers_timestamp{dataset="<dataset_name>"}``: Timestamp of latest n_triggers value
+- ``ifcb_n_images_value{dataset="<dataset_name>"}``: Latest n_images in Count
+- ``ifcb_n_images_timestamp{dataset="<dataset_name>"}``: Timestamp of latest n_images value
 
 Prometheus Integration
 ---------------------
@@ -106,7 +106,7 @@ Add the following to your Prometheus configuration to scrape metrics::
 Troubleshooting
 ---------------
 
-- If you see `ModuleNotFoundError`, make sure to update your environment with::
+- If you see ``ModuleNotFoundError``, make sure to update your environment with::
 
      conda env update -f environment.yml
 
@@ -135,7 +135,7 @@ Running with Docker
 Credits
 -------
 
-This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
+This package was created with Cookiecutter_ and the ``audreyr/cookiecutter-pypackage``_ project template.
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
-.. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+.. _``audreyr/cookiecutter-pypackage``: https://github.com/audreyr/cookiecutter-pypackage
