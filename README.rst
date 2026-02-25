@@ -27,9 +27,9 @@ This project relies on conda for installation and managing of the project depend
 
       conda env update -f environment.yml
 
-4. An Additional environment file is present for testing and development environments. The additional developer dependencies can be installed with::
+4. An additional environment file is present for development and testing. The developer dependencies can be installed with::
 
-      conda env update -f test-environment.yml
+   conda env update -f dev-environment.yml
 
 5. To install the project to the new environment::
 
@@ -58,21 +58,34 @@ The following  are a list of the base URLs that can be used with this exporter:
    3. for Salish Sea: https://salish-sea-ifcbdb.srv.axds.co/api
    4. for HABON: https://habon-ifcb.whoi.edu/api
 
-Additionally, the loop interval, port, lag threshold, and lookback period can be specified with arguments. The defaults are: interval=900 seconds, port=8000, lag-threshold-seconds=86400 (24 hours), lookback-seconds=1209600 (14 days).::
 
-   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000 --lag-threshold-seconds 43200 --lookback-seconds 604800
+Additional arguments can be specified:
+  --interval: Update interval in seconds (default: 900)
+  --port: Port to expose Prometheus metrics (default: 8000)
+  --lag-threshold-seconds: Lag threshold in seconds to determine if dataset is up-to-date (default: 86400)
+  --lookback-bins: Number of bins to look back for products (default: 20)
+  --log-level: Logging level (default: INFO)
+  --datasets: CSV list of specific datasets (default: all datasets in IFCB API)
+
+Example with custom arguments::
+
+   python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --interval 600 --port 9000 --lag-threshold-seconds 43200 --lookback-bins 10 --log-level DEBUG
+
+You can also use the CLI entry point::
+
+   python ifcb_prometheus_exporter/cli.py --base-url https://ifcb.caloos.org/api
 
 Metrics Returned
 -----------------
 The exporter provides the following metrics:
 - `ifcb_latest_bin_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest bin for the specified dataset (Unix timestamp), or 0 if none exist
-- `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
 - `ifcb_latest_blobs_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest blobs for the specified dataset (Unix timestamp), or 0 if none exist
 - `ifcb_latest_blobs_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest blobs for dataset (seconds), or -1 if none exist
 - `ifcb_latest_features_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest features for the specified dataset (Unix timestamp), or 0 if none exist
 - `ifcb_latest_features_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest features for dataset (seconds), or -1 if none exist
 - `ifcb_latest_class_scores_timestamp{dataset="<dataset_name>"}`: Timestamp of the latest class scores for the specified dataset (Unix timestamp), or 0 if none exist
 - `ifcb_latest_class_scores_lag_seconds{dataset="<dataset_name>"}`: Lag time for the latest class scores for dataset (seconds), or -1 if none exist
+- `ifcb_is_dataset_up_to_date{dataset="<dataset_name>"}`: Indicates if the dataset is lagging (0) or up-to-date (1)
 - `ifcb_size_value{dataset="<dataset_name>"}`: Latest size value of the dataset in Bytes
 - `ifcb_size_timestamp{dataset="<dataset_name>"}`: Timestamp of latest size value
 - `ifcb_temperature_value{dataset="<dataset_name>"}`: Latest temperature in Degrees C
@@ -124,12 +137,18 @@ This project is licensed under the terms described in LICENSE.
 Building with Docker
 --------------------
 
-To build the docker container::
+
+To build the Docker container::
 
    docker build -t ifcb-prometheus-exporter .
 
-Running with Docker
--------------------
+To run the exporter in Docker and expose metrics on port 8000::
+
+   docker run -p 8000:8000 ifcb-prometheus-exporter
+
+You can pass arguments to the exporter as needed, for example::
+
+   docker run -p 9000:9000 ifcb-prometheus-exporter python ifcb_prometheus_exporter/ifcb_prometheus_exporter.py --base-url https://ifcb.caloos.org/api --port 9000
 
 Credits
 -------
